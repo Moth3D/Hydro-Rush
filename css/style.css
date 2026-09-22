@@ -1,0 +1,1641 @@
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #04121c;
+  font-family: 'Segoe UI', Arial, sans-serif;
+  color: #eaf6ff;
+  user-select: none;
+}
+
+#game-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+#hud {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+}
+
+/* One clone of #player-hud-template per active player (js/hud.js's
+   PlayerHud), positioned via inline left/top/width/height matching that
+   player's own split-screen viewport (js/main.js). With a single player
+   that rect covers the whole window, so this is pixel-identical to the old
+   single-#hud layout it replaces. */
+.player-hud {
+  position: fixed;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  overflow: hidden;
+}
+
+.player-hud-top-row, .player-hud-bottom-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+/* Thin colored strips between viewports in split-screen (js/main.js
+   recomputes these alongside the viewport rects on resize/player-count
+   change) - a plain CSS overlay rather than any WebGL trick. */
+.split-divider {
+  position: fixed;
+  background: rgba(234, 246, 255, 0.5);
+}
+
+/* Colored per-player tag (js/coop.js's PLAYER_COLORS) shown above the lap
+   counter only in co-op (2+ players) - solo play leaves this empty via
+   PlayerHud.setLabel(''), and :empty hides it so a lone player's HUD looks
+   exactly like it always has. */
+.player-label {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  text-shadow: 0 2px 6px rgba(0,0,0,0.8);
+}
+
+.player-label:empty {
+  display: none;
+}
+
+/* Shown once this player finishes while co-op racers are still out on the
+   course (see main.js's onPlayerFinished) - reuses the countdown overlay's
+   big-centered-banner look. */
+.player-finished-overlay {
+  position: absolute;
+  top: 42%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  text-shadow: 0 4px 22px rgba(0,0,0,0.85);
+}
+
+.player-finished-overlay.hidden {
+  display: none;
+}
+
+.player-finished-title {
+  font-size: 40px;
+  font-weight: 900;
+  letter-spacing: 2px;
+  color: #ffd23f;
+}
+
+.player-finished-subtitle {
+  font-size: 14px;
+  opacity: 0.85;
+  margin-top: 4px;
+}
+
+#touch-controls {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  display: none;
+  opacity: 0;
+  transition: opacity 0.35s ease;
+}
+
+#touch-controls.touch-enabled {
+  display: block;
+}
+
+/* Buttons keep pointer-events:all (see .touch-btn) even at opacity 0, so
+   the very touch that reveals the controls (see input.js) can also land on
+   and press one - the layout is fixed/memorized, so an invisible hit target
+   still works, it just isn't visible until this class is added. */
+#touch-controls.touch-visible {
+  opacity: 1;
+}
+
+#touch-left-cluster, #touch-right-cluster {
+  position: absolute;
+  bottom: 84px;
+  display: flex;
+  align-items: flex-end;
+  gap: 14px;
+}
+
+#touch-left-cluster { left: 18px; }
+#touch-right-cluster { right: 18px; }
+
+.touch-btn {
+  pointer-events: all;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  border: 2px solid rgba(234, 246, 255, 0.45);
+  background: rgba(4, 20, 30, 0.5);
+  color: #eaf6ff;
+  font-size: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.touch-btn.pressed {
+  background: rgba(255, 210, 63, 0.55);
+  border-color: #ffd23f;
+}
+
+.touch-btn-throttle {
+  width: 76px;
+  height: 76px;
+  font-size: 28px;
+}
+
+.touch-btn-boost {
+  background: rgba(255, 138, 0, 0.3);
+  border-color: rgba(255, 178, 74, 0.6);
+}
+
+.touch-btn-boost.pressed {
+  background: rgba(255, 138, 0, 0.75);
+  border-color: #ffb24a;
+}
+
+#pause-button {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  pointer-events: all;
+  cursor: pointer;
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  border: 2px solid rgba(234, 246, 255, 0.5);
+  background: rgba(4, 20, 30, 0.55);
+  color: #eaf6ff;
+  font-size: 14px;
+  line-height: 1;
+  z-index: 5;
+}
+
+#pause-button:active {
+  transform: translateX(-50%) scale(0.94);
+}
+
+.player-hud-top-left, .player-hud-bottom-left {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.player-hud-top-left {
+  align-items: flex-start;
+}
+
+.player-hud-bottom-right {
+  align-items: flex-end;
+}
+
+.lap-counter {
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  text-shadow: 0 2px 6px rgba(0,0,0,0.8);
+  color: #ffd23f;
+}
+
+.timer {
+  font-size: 20px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 2px 6px rgba(0,0,0,0.8);
+}
+
+.place-indicator {
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  color: #ff8a00;
+  text-shadow: 0 2px 6px rgba(0,0,0,0.8);
+}
+
+/* Single shared minimap (js/hud.js's Minimap) - pinned to a fixed screen
+   corner regardless of player count/layout, rather than duplicated per
+   viewport. In 3P/4P split-screen it visually sits over whichever player
+   occupies that corner - a normal, accepted split-screen convention. */
+#minimap {
+  position: fixed;
+  top: 18px;
+  right: 18px;
+  background: rgba(4, 20, 30, 0.55);
+  border: 2px solid rgba(234, 246, 255, 0.35);
+  border-radius: 8px;
+}
+
+.meter-label {
+  font-size: 12px;
+  letter-spacing: 2px;
+  opacity: 0.85;
+  text-shadow: 0 1px 4px rgba(0,0,0,0.8);
+}
+
+.boost-meter {
+  width: 220px;
+  height: 18px;
+  border: 2px solid rgba(234, 246, 255, 0.6);
+  border-radius: 4px;
+  background: rgba(0,0,0,0.4);
+  overflow: hidden;
+}
+
+.boost-fill {
+  height: 100%;
+  width: 100%;
+  background: linear-gradient(90deg, #00c3ff, #6dffb8);
+  transition: width 0.08s linear;
+}
+
+.boost-fill.boosting {
+  background: linear-gradient(90deg, #ff8a00, #ffe135);
+}
+
+.boost-fill.overheated {
+  background: repeating-linear-gradient(90deg, #ff2020, #ff2020 8px, #4a0000 8px, #4a0000 16px);
+  animation: overheat-flash 0.35s steps(2) infinite;
+}
+
+@keyframes overheat-flash {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.health-meter {
+  width: 220px;
+  height: 13px;
+  border: 2px solid rgba(234, 246, 255, 0.6);
+  border-radius: 4px;
+  background: rgba(0,0,0,0.4);
+  overflow: hidden;
+  margin-top: 2px;
+}
+
+.health-fill {
+  height: 100%;
+  width: 100%;
+  background: linear-gradient(90deg, #ff3b3b, #6dffb8);
+  transition: width 0.15s linear;
+}
+
+.health-fill.low {
+  background: #ff3b3b;
+  animation: overheat-flash 0.6s ease-in-out infinite;
+}
+
+/* Colorblind-friendly mode (Options screen, js/menu.js's
+   applyAccessibilitySettings toggles this class on <body>) - swaps the
+   health bar's red->green gradient for red->blue, the standard safe
+   substitute (green is what's easily confused with red at a glance; blue
+   reads as distinct from both). .low stays plain red either way - it's
+   already distinguished by the blink animation, not by color alone. */
+body.colorblind-mode .health-fill {
+  background: linear-gradient(90deg, #ff3b3b, #4d9fff);
+}
+
+.speed-value {
+  font-size: 42px;
+  font-weight: 900;
+  line-height: 1;
+  text-align: right;
+  text-shadow: 0 2px 6px rgba(0,0,0,0.8);
+}
+
+.player-hud-bottom-right {
+  text-align: right;
+}
+
+.checkpoint-flash {
+  position: absolute;
+  top: 40%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 40px;
+  font-weight: 900;
+  color: #6dffb8;
+  text-shadow: 0 2px 10px rgba(0,0,0,0.9);
+  opacity: 0;
+}
+
+.checkpoint-flash.show {
+  animation: flashPop 0.9s ease-out;
+}
+
+@keyframes flashPop {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.7); }
+  20% { opacity: 1; transform: translate(-50%, -50%) scale(1.05); }
+  70% { opacity: 1; }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(1); }
+}
+
+.overheat-warning {
+  position: absolute;
+  top: 18%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 22px;
+  font-weight: 900;
+  letter-spacing: 2px;
+  text-shadow: 0 2px 10px rgba(0,0,0,0.9);
+  opacity: 0;
+}
+
+.overheat-warning.show.warning {
+  opacity: 1;
+  color: #ffb300;
+  animation: warning-pulse 0.5s ease-in-out infinite;
+}
+
+.overheat-warning.show.danger {
+  opacity: 1;
+  color: #ff2020;
+  animation: warning-pulse 0.28s ease-in-out infinite;
+}
+
+@keyframes warning-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
+.countdown-overlay {
+  position: absolute;
+  top: 42%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 88px;
+  font-weight: 900;
+  letter-spacing: 2px;
+  color: #ffd23f;
+  text-shadow: 0 4px 22px rgba(0,0,0,0.85);
+}
+
+/* The post-explosion "RESPAWNING n" message reads better in a smaller face
+   than the bare single-digit pre-race countdown - see hud.js, which toggles
+   this based on the text length. */
+.countdown-overlay.small {
+  font-size: 34px;
+  white-space: nowrap;
+}
+
+.countdown-overlay.hidden {
+  display: none;
+}
+
+.countdown-overlay.pop {
+  animation: countdownPop 0.6s ease-out;
+}
+
+@keyframes countdownPop {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.6); }
+  25% { opacity: 1; transform: translate(-50%, -50%) scale(1.15); }
+  60% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  100% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+
+#cockpit-dashboard {
+  position: fixed;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: flex-end;
+  gap: 28px;
+  pointer-events: none;
+}
+
+.gauge {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  filter: drop-shadow(0 4px 10px rgba(0,0,0,0.5));
+}
+
+.gauge-speed svg { width: 130px; height: 130px; }
+.gauge-boost svg { width: 90px; height: 90px; }
+
+.gauge-face {
+  fill: rgba(8, 22, 32, 0.88);
+  stroke: rgba(234, 246, 255, 0.4);
+  stroke-width: 2;
+}
+
+.gauge-ticks line {
+  stroke: rgba(234, 246, 255, 0.55);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+}
+
+.gauge-needle {
+  stroke: #ff5050;
+  stroke-width: 3;
+  stroke-linecap: round;
+  transform-origin: center;
+  transition: transform 0.05s linear;
+}
+
+.gauge-needle-boost {
+  stroke: #6dffb8;
+}
+
+.gauge-hub {
+  fill: #eaf6ff;
+}
+
+.gauge-value {
+  margin-top: -34px;
+  font-size: 20px;
+  font-weight: 800;
+  color: #eaf6ff;
+  font-variant-numeric: tabular-nums;
+}
+
+.gauge-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  opacity: 0.7;
+  margin-bottom: 6px;
+}
+
+.menu-overlay {
+  position: fixed;
+  inset: 0;
+  background: radial-gradient(ellipse at center, rgba(6,30,44,0.94), rgba(2,10,16,0.98));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  /* "safe" falls back to start-alignment once content overflows the
+     viewport (boat select can now run to 3 rows of cards) instead of the
+     plain `center` keyword's classic bug: centered content that's taller
+     than its container overflows equally top and bottom, but overflow-y:
+     auto here only ever lets you scroll into the bottom half, leaving the
+     top row permanently clipped with no way to reach it. */
+  justify-content: safe center;
+  text-align: center;
+  gap: 14px;
+  z-index: 10;
+  padding: 24px;
+  overflow-y: auto;
+  /* UI scale (Options screen) - a plain paint-time transform, never below
+     1 (see js/settings.js's uiScale for why), driven by the CSS var below.
+     Deliberately not applied to #hud/.player-hud - see that comment. */
+  transform: scale(var(--ui-scale, 1));
+}
+
+:root {
+  --ui-scale: 1;
+}
+
+.menu-overlay h1 {
+  font-size: 52px;
+  margin: 0;
+  letter-spacing: 4px;
+  color: #ffd23f;
+  text-shadow: 0 0 24px rgba(255, 210, 63, 0.5);
+}
+
+.menu-subtitle {
+  margin: 0 0 10px 0;
+  opacity: 0.8;
+  font-size: 15px;
+}
+
+.menu-footer {
+  position: fixed;
+  bottom: 14px;
+  font-size: 12px;
+  opacity: 0.5;
+}
+
+/* The main menu specifically (not mode select, options, etc.) trades the
+   usual near-opaque backing for a vignette, so the "attract mode" scene
+   running behind it (a course with AI racing - see main.js's
+   startAttractMode) is actually visible rather than fully hidden. Darker at
+   top/bottom (title/buttons/footer) than in the middle, where the track
+   itself has the most room to show through. */
+#main-menu {
+  background: linear-gradient(
+    to bottom,
+    rgba(2, 10, 16, 0.7) 0%,
+    rgba(2, 10, 16, 0.15) 32%,
+    rgba(2, 10, 16, 0.15) 62%,
+    rgba(2, 10, 16, 0.8) 100%
+  );
+}
+
+/* A soft backing panel just behind the button stack, since it sits in the
+   more-transparent middle band above - keeps button labels legible over a
+   moving background regardless of what's happening behind them. */
+#main-menu .menu-buttons {
+  background: rgba(2, 10, 16, 0.4);
+  border: 1px solid rgba(234, 246, 255, 0.12);
+  border-radius: 14px;
+  padding: 22px 28px;
+  backdrop-filter: blur(3px);
+}
+
+.menu-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 260px;
+}
+
+/* Course-select's BACK plus a shortcut straight to Boat Select (js/main.js's
+   onLevelChangeBoat) - previously the only way to change boats mid-flow was
+   Back all the way out to the main menu and back in through Play again. */
+.level-select-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+}
+
+.controls-columns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+  justify-content: center;
+}
+
+.controls-column {
+  display: flex;
+  flex-direction: column;
+}
+
+.controls-column-title {
+  font-weight: 800;
+  letter-spacing: 1px;
+  font-size: 12px;
+  opacity: 0.6;
+  margin-bottom: 6px;
+}
+
+.controls-box {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 14px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 8px;
+  padding: 16px 24px;
+  margin-bottom: 12px;
+  min-width: 320px;
+}
+
+.control-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 4px 0;
+}
+
+.control-row-label {
+  font-weight: 700;
+  text-align: left;
+}
+
+.control-row-keys {
+  display: flex;
+  gap: 6px;
+}
+
+.key-chip {
+  pointer-events: all;
+  cursor: pointer;
+  min-width: 64px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(234, 246, 255, 0.35);
+  background: rgba(255,255,255,0.08);
+  color: #eaf6ff;
+  transition: transform 0.08s ease, border-color 0.15s ease;
+}
+
+.key-chip:active {
+  transform: scale(0.94);
+}
+
+.key-chip.waiting {
+  border-color: #ffd23f;
+  color: #ffd23f;
+  animation: key-chip-pulse 1s ease-in-out infinite;
+}
+
+@keyframes key-chip-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+
+.controls-gamepad-box {
+  font-size: 12px;
+  gap: 4px;
+  opacity: 0.85;
+}
+
+.controls-gamepad-title {
+  font-weight: 800;
+  letter-spacing: 1px;
+  font-size: 11px;
+  opacity: 0.6;
+  margin-bottom: 2px;
+}
+
+.controls-hint {
+  font-size: 12px;
+  opacity: 0.6;
+  max-width: 360px;
+}
+
+.controls-buttons-row {
+  display: flex;
+  gap: 12px;
+}
+
+.menu-btn {
+  pointer-events: all;
+  cursor: pointer;
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  padding: 14px 36px;
+  border-radius: 8px;
+  border: none;
+  background: linear-gradient(180deg, #ffe135, #ff8a00);
+  color: #201400;
+  box-shadow: 0 6px 18px rgba(255, 138, 0, 0.4);
+  transition: transform 0.08s ease;
+}
+
+.menu-btn:active {
+  transform: scale(0.96);
+}
+
+.menu-btn-secondary {
+  background: rgba(255,255,255,0.08);
+  color: #eaf6ff;
+  box-shadow: none;
+  border: 1px solid rgba(234, 246, 255, 0.35);
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.08s ease;
+}
+
+/* A secondary button picks up the same yellow as .menu-btn's permanent
+   "primary action" look, but only for whichever one is actually the
+   highlighted option right now - mouse hover, keyboard/gamepad focus
+   (nav-focused - see js/navigation.js), or native :focus-visible. Applied
+   here rather than making every secondary button yellow all the time,
+   which read as "this one specific button is special" rather than
+   "this is the one you're currently on". */
+.menu-btn-secondary:hover,
+.menu-btn-secondary:focus-visible,
+.menu-btn-secondary.nav-focused {
+  background: linear-gradient(180deg, #ffe135, #ff8a00);
+  color: #201400;
+  border-color: transparent;
+  box-shadow: 0 6px 18px rgba(255, 138, 0, 0.4);
+}
+
+#pause-track-row {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 8px;
+  padding: 14px 24px;
+  margin-bottom: 4px;
+}
+
+#pause-track-label {
+  font-size: 13px;
+  opacity: 0.8;
+  letter-spacing: 0.5px;
+}
+
+#pause-track-name {
+  font-weight: 800;
+  opacity: 1;
+  color: #6dffb8;
+}
+
+#pause-next-track {
+  font-size: 13px;
+  padding: 8px 20px;
+}
+
+#finish-time {
+  font-size: 26px;
+  font-variant-numeric: tabular-nums;
+  color: #6dffb8;
+}
+
+.cup-standings-subtitle {
+  font-size: 15px;
+  opacity: 0.8;
+  margin-top: -8px;
+}
+
+.cup-standings-table {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 320px;
+  max-width: 90vw;
+}
+
+.cup-standings-row {
+  display: grid;
+  grid-template-columns: 40px 1fr 70px;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  border-radius: 8px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(234, 246, 255, 0.15);
+  font-size: 14px;
+}
+
+.cup-standings-row.header {
+  background: none;
+  border: none;
+  opacity: 0.6;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  padding: 0 14px;
+}
+
+.cup-standings-row .csr-rank {
+  font-weight: 700;
+  text-align: center;
+}
+
+.cup-standings-row .csr-name {
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cup-standings-row .csr-points {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  font-weight: 700;
+}
+
+/* The player's own row, always findable at a glance. */
+.cup-standings-row.you {
+  border-color: #8fd3ff;
+  background: rgba(143, 211, 255, 0.1);
+}
+
+/* Whoever's leading the cup right now (or won it, on the final screen). */
+.cup-standings-row.leader {
+  border-color: #ffd23f;
+  background: rgba(255, 210, 63, 0.15);
+}
+
+.cup-standings-row.leader .csr-rank,
+.cup-standings-row.leader .csr-points {
+  color: #ffd23f;
+}
+
+/* Scoreboard detail screen's times table - one extra column (boat + date)
+   over the 3-column cup-standings/race-results layout above, so it gets its
+   own grid-template-columns rather than a 4th generic csr- span class. */
+.cup-standings-row.scoreboard-row {
+  grid-template-columns: 32px 1fr 90px 100px;
+}
+
+.cup-standings-row .csr-date {
+  text-align: right;
+  opacity: 0.6;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.scoreboard-empty {
+  opacity: 0.6;
+  font-size: 14px;
+  text-align: center;
+  padding: 10px 0;
+}
+
+/* Achievements screen - reuses the cup-standings-table/row shell (same
+   dark card-row look) with its own icon+name/desc+status layout. */
+.cup-standings-row.achievement-row {
+  grid-template-columns: 34px 1fr 90px;
+  min-width: 420px;
+}
+
+.achievement-row .achievement-icon {
+  font-size: 18px;
+  text-align: center;
+}
+
+.achievement-row .achievement-name {
+  font-weight: 700;
+}
+
+.achievement-row .achievement-desc {
+  font-size: 12px;
+  opacity: 0.75;
+  margin-top: 2px;
+}
+
+.achievement-row .achievement-status {
+  text-align: right;
+  font-size: 11px;
+  opacity: 0.8;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Locked rows stay legible but visibly de-emphasized - unlocked ones get
+   the same gold "leader" treatment used elsewhere (cup standings, a #1
+   scoreboard time) so a completed achievement reads as an accomplishment,
+   not just a checked box. */
+.achievement-row.locked {
+  opacity: 0.55;
+}
+
+.achievement-row.unlocked {
+  border-color: #ffd23f;
+  background: rgba(255, 210, 63, 0.1);
+}
+
+.achievement-row.unlocked .achievement-status {
+  color: #ffd23f;
+  opacity: 1;
+}
+
+/* Achievement unlock toast - fixed/floating, independent of whichever
+   .menu-overlay (or the HUD) happens to be showing underneath it; see
+   index.html for why. Slides down from off-screen rather than just fading,
+   so it reads as a distinct event even with a race's own busy HUD behind it. */
+#achievement-toast {
+  position: fixed;
+  top: 0;
+  left: 50%;
+  transform: translate(-50%, -120%);
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 18px;
+  padding: 12px 20px;
+  border-radius: 10px;
+  background: rgba(10, 20, 10, 0.92);
+  border: 1px solid #ffd23f;
+  box-shadow: 0 0 24px rgba(255, 210, 63, 0.35);
+  transition: transform 0.35s ease;
+  pointer-events: none;
+}
+
+#achievement-toast.show {
+  transform: translate(-50%, 0);
+}
+
+.achievement-toast-icon {
+  font-size: 26px;
+}
+
+.achievement-toast-title {
+  font-size: 10px;
+  letter-spacing: 1px;
+  color: #ffd23f;
+  font-weight: 700;
+}
+
+.achievement-toast-name {
+  font-size: 16px;
+  font-weight: 700;
+  color: #eaf6ff;
+}
+
+.level-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  justify-content: center;
+  max-width: 900px;
+}
+
+/* Players (co-op join) screen - one card per possible slot (js/coop.js's
+   MAX_PLAYERS), filled in as controllers press A/Start (js/menu.js's
+   renderPlayersList). Not part of js/navigation.js's focus system - see
+   js/coop.js for why - so these are plain, non-focusable cards. */
+.players-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  justify-content: center;
+  max-width: 900px;
+}
+
+.player-slot-card {
+  width: 180px;
+  padding: 20px 12px;
+  border-radius: 10px;
+  border: 2px solid rgba(234, 246, 255, 0.25);
+  background: rgba(255,255,255,0.05);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.player-slot-card.joined {
+  background: rgba(255,255,255,0.09);
+}
+
+.player-slot-label {
+  font-weight: 800;
+  font-size: 16px;
+  letter-spacing: 1px;
+}
+
+.player-slot-status {
+  font-size: 13px;
+  opacity: 0.75;
+}
+
+/* Plain text, not a button (js/menu.js's renderPlayersList) - starting only
+   ever happens via a controller/keyboard press, never a click, so nothing
+   here should look clickable. */
+.players-start-hint {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: #ffd23f;
+  opacity: 0.9;
+}
+
+/* Race-mode-only row on the level-select screen (js/menu.js's
+   setLevelSelectMode) holding both the racer headcount and AI difficulty
+   pickers side by side - the two settings that actually govern the AI
+   opponents, so they live right next to each other rather than difficulty
+   being a separate screen before this one. */
+.race-options-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 24px;
+  margin: -6px 0 4px 0;
+}
+
+.race-option-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.race-option-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  opacity: 0.6;
+}
+
+.racer-count-options {
+  display: flex;
+  gap: 10px;
+}
+
+.racer-count-btn {
+  pointer-events: all;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  padding: 8px 18px;
+  border-radius: 8px;
+  border: 1px solid rgba(234, 246, 255, 0.35);
+  background: rgba(255,255,255,0.06);
+  color: #eaf6ff;
+  transition: transform 0.08s ease, border-color 0.15s ease;
+}
+
+.racer-count-btn:active {
+  transform: scale(0.96);
+}
+
+.racer-count-btn.selected {
+  border-color: #6dffb8;
+  background: rgba(109, 255, 184, 0.18);
+  color: #6dffb8;
+}
+
+.level-card {
+  pointer-events: all;
+  cursor: pointer;
+  width: 180px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(234, 246, 255, 0.25);
+  border-radius: 10px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  position: relative;
+  transition: transform 0.1s ease, border-color 0.15s ease;
+}
+
+.level-card:not(.locked):hover, .level-card:not(.locked):focus-visible, .level-card:not(.locked).nav-focused {
+  transform: translateY(-3px);
+  border-color: #ffd23f;
+  outline: none;
+}
+
+/* Generic focus ring for gamepad/keyboard menu navigation (js/navigation.js)
+   - works for any focusable control (buttons, cards, sliders, checkboxes)
+   without needing a per-component override like the level-card rule above. */
+.nav-focused {
+  outline: 3px solid #ffd23f !important;
+  outline-offset: 2px;
+}
+
+.level-card canvas {
+  width: 100%;
+  height: auto;
+  background: rgba(0,0,0,0.35);
+  border-radius: 6px;
+}
+
+.level-card-name {
+  font-weight: 800;
+  font-size: 15px;
+  letter-spacing: 0.5px;
+}
+
+.level-card-desc {
+  font-size: 12px;
+  opacity: 0.75;
+  line-height: 1.3;
+}
+
+.cup-track-list {
+  font-size: 10px;
+  opacity: 0.55;
+  letter-spacing: 0.2px;
+  line-height: 1.4;
+}
+
+.level-card-badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  padding: 3px 8px;
+  border-radius: 10px;
+  background: rgba(109, 255, 184, 0.2);
+  color: #6dffb8;
+  border: 1px solid rgba(109, 255, 184, 0.4);
+}
+
+/* Marks a boat's unique gimmick(s) (see js/boats.js's gimmicks array) -
+   opposite corner from .level-card-badge's "SELECTED" tag so the two never
+   collide. Stacks vertically since a boat can carry more than one (e.g.
+   Iron Turtle: armor + overdrive). */
+.boat-gimmick-badges {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: flex-start;
+}
+
+.boat-gimmick-badge {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  padding: 3px 8px;
+  border-radius: 10px;
+  background: rgba(255, 137, 224, 0.2);
+  color: #ff89e0;
+  border: 1px solid rgba(255, 137, 224, 0.4);
+}
+
+/* Click target that opens the gimmick picker (js/navigation.js's
+   openGimmickPicker) for a customizable boat (js/menu.js). Deliberately a
+   plain div, not a button/role=button, so it stays mouse/touch-clickable
+   without ever entering js/navigation.js's FOCUSABLE_SELECTOR - X/gamepad-X
+   is the D-pad/gamepad path to the exact same picker instead (see
+   js/navigation.js's openFocusedGimmickPicker). Also doubles as the on-card
+   prompt that a gimmick can be changed at all. */
+.boat-gimmick-chip,
+.level-card-mirror-chip {
+  pointer-events: all;
+  cursor: pointer;
+  width: 100%;
+  text-align: center;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: rgba(255,255,255,0.06);
+  border: 1px dashed rgba(143, 211, 255, 0.45);
+  margin-top: 2px;
+}
+
+.boat-gimmick-chip:hover,
+.level-card-mirror-chip:hover {
+  border-style: solid;
+  border-color: #8fd3ff;
+  background: rgba(143, 211, 255, 0.12);
+}
+
+.boat-gimmick-chip-value,
+.level-card-mirror-chip-value {
+  font-size: 11px;
+  font-weight: 700;
+  color: #8fd3ff;
+}
+
+/* The actual "how do I change this" answer, spelled out on the card itself
+   rather than left to the easy-to-miss controls-hint at the top of the
+   whole boat-select screen. Same reasoning for the level-select/scoreboard
+   mirror chip right below it. */
+.boat-gimmick-chip-hint,
+.level-card-mirror-chip-hint {
+  font-size: 9px;
+  font-weight: 600;
+  color: #ffd23f;
+  opacity: 0.85;
+  margin-top: 1px;
+}
+
+.level-card.locked {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.level-card.selected {
+  border-color: #6dffb8;
+  box-shadow: 0 0 0 2px rgba(109, 255, 184, 0.35);
+}
+
+/* Boat hand-off only (js/main.js's startBoatHandoff/js/menu.js's
+   setBoatHandoffMode) - an earlier player in the sequence already took this
+   boat, so it's disabled here to keep every joined player's boat visually
+   distinct on track. */
+.level-card.boat-taken {
+  opacity: 0.35;
+  filter: grayscale(0.6);
+  pointer-events: none;
+}
+
+/* Marks a boat card as "entered" for gamepad/keyboard color editing (Y /
+   KeyY - see js/navigation.js's toggleColorEdit) so it's clear focus has
+   moved down into its swatches rather than sitting on the card itself. */
+.level-card.color-edit-active {
+  border-color: #7fc8ff;
+  box-shadow: 0 0 0 2px rgba(127, 200, 255, 0.4);
+}
+
+/* In-page palette substituted for the native OS color dialog when a color
+   swatch is "activated" via keyboard/gamepad (see js/navigation.js's
+   openColorPicker) - a controller has no way to drive that native dialog at
+   all, so this stays fully keyboard/gamepad-navigable itself. Mouse clicks
+   on a swatch still go straight to the native picker, unaffected. */
+#gamepad-color-picker {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 50;
+  background: rgba(10, 14, 20, 0.95);
+  border: 1px solid rgba(234, 246, 255, 0.25);
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
+}
+
+.color-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(8, 40px);
+  gap: 10px;
+}
+
+.color-picker-swatch {
+  pointer-events: all;
+  cursor: pointer;
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  border: 2px solid rgba(234, 246, 255, 0.3);
+}
+
+.color-picker-hint {
+  margin-top: 14px;
+  font-size: 12px;
+  opacity: 0.7;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.mode-card {
+  width: 220px;
+  min-height: 130px;
+  justify-content: flex-start;
+  padding-top: 26px;
+}
+
+.boat-weight {
+  font-size: 11px;
+  font-weight: 600;
+  opacity: 0.8;
+  letter-spacing: 0.2px;
+}
+
+.boat-colors {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  margin-top: 2px;
+}
+
+.boat-color-swatch {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  cursor: pointer;
+}
+
+.boat-color-swatch input[type="color"] {
+  pointer-events: all;
+  cursor: pointer;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid rgba(234, 246, 255, 0.35);
+  border-radius: 5px;
+  background: none;
+}
+
+.boat-color-swatch span {
+  font-size: 9px;
+  opacity: 0.6;
+}
+
+.boat-color-reset {
+  pointer-events: all;
+  cursor: pointer;
+  background: none;
+  border: none;
+  color: #8fd3ff;
+  font-size: 10px;
+  text-decoration: underline;
+  opacity: 0.8;
+  padding: 0;
+}
+
+.boat-stats {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 2px;
+}
+
+/* Row below the boat grid holding #boat-gimmick-info-btn (js/menu.js's
+   openFullGimmickInfo) - changing a boat's gimmick itself is done with
+   X/gamepad-X on the focused card instead (js/navigation.js's
+   cycleFocusedGimmick), same pattern as Y for colors, so there's no
+   per-card button here to interrupt D-pad down-navigation between cards. */
+.boat-gimmick-bar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+}
+
+.boat-gimmick-bar-btn {
+  pointer-events: all;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  padding: 8px 16px;
+  border-radius: 8px;
+  background: rgba(255,255,255,0.06);
+  color: #eaf6ff;
+  border: 1px solid rgba(234, 246, 255, 0.35);
+  transition: border-color 0.15s ease;
+}
+
+.boat-gimmick-bar-btn:hover, .boat-gimmick-bar-btn:focus-visible {
+  border-color: #ffd23f;
+  outline: none;
+}
+
+.boat-gimmick-bar-btn:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+/* Read-only reference panel listing every selectable gimmick's exact effect
+   - opened from the "ⓘ" button above (js/navigation.js's openGimmickInfo).
+   Full-screen dimmed backdrop so it also blocks mouse clicks on the boat
+   cards underneath while open, same as the gamepad/keyboard input-trapping
+   done in navigation.js's own keydown/pollGamepadNav handlers. */
+#gimmick-info-panel {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(2, 6, 10, 0.75);
+  pointer-events: all;
+}
+
+.gimmick-info-box {
+  background: rgba(10, 14, 20, 0.97);
+  border: 1px solid rgba(234, 246, 255, 0.25);
+  border-radius: 12px;
+  padding: 20px 24px;
+  max-width: 440px;
+  width: 100%;
+  max-height: 80vh;
+  overflow-y: auto;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
+  text-align: left;
+}
+
+.gimmick-info-title {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: #ffd23f;
+  margin-bottom: 12px;
+  text-align: center;
+}
+
+.gimmick-info-section-title {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  opacity: 0.75;
+  margin: 14px 0 8px;
+}
+
+.gimmick-info-section-title:first-of-type {
+  margin-top: 0;
+}
+
+.gimmick-info-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.gimmick-info-row {
+  border: 1px solid rgba(234, 246, 255, 0.15);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
+.gimmick-info-row.current {
+  border-color: #6dffb8;
+  background: rgba(109, 255, 184, 0.1);
+}
+
+.gimmick-info-name {
+  font-size: 12px;
+  font-weight: 700;
+  margin-bottom: 3px;
+}
+
+.gimmick-info-row.current .gimmick-info-name {
+  color: #6dffb8;
+}
+
+.gimmick-info-desc {
+  font-size: 11px;
+  opacity: 0.8;
+  line-height: 1.35;
+}
+
+.gimmick-info-close {
+  pointer-events: all;
+  cursor: pointer;
+  display: block;
+  margin: 16px auto 0;
+  padding: 6px 18px;
+  font-size: 12px;
+  font-weight: 700;
+  background: rgba(255,255,255,0.08);
+  color: #eaf6ff;
+  border: 1px solid rgba(234, 246, 255, 0.35);
+  border-radius: 8px;
+}
+
+.gimmick-info-close:hover, .gimmick-info-close:focus-visible {
+  border-color: #ffd23f;
+}
+
+.gimmick-info-hint {
+  margin-top: 10px;
+  font-size: 10px;
+  opacity: 0.6;
+  text-align: center;
+}
+
+/* Selectable gimmick picker (js/navigation.js's openGimmickPicker) - opened
+   from a boat card's .boat-gimmick-chip (click) or X/gamepad-X (D-pad).
+   Same full-screen dimmed backdrop as #gimmick-info-panel above, but rows
+   are real pick targets: clickable by mouse, and individually highlighted
+   (.nav-focused) as the up/down-navigable D-pad selection. */
+#gimmick-picker-panel {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(2, 6, 10, 0.75);
+  pointer-events: all;
+}
+
+.gimmick-picker-box {
+  background: rgba(10, 14, 20, 0.97);
+  border: 1px solid rgba(234, 246, 255, 0.25);
+  border-radius: 12px;
+  padding: 20px 24px;
+  max-width: 380px;
+  width: 100%;
+  max-height: 80vh;
+  overflow-y: auto;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
+  text-align: left;
+}
+
+.gimmick-picker-title {
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: #ffd23f;
+  margin-bottom: 12px;
+  text-align: center;
+}
+
+.gimmick-picker-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.gimmick-picker-row {
+  pointer-events: all;
+  cursor: pointer;
+  border: 1px solid rgba(234, 246, 255, 0.15);
+  border-radius: 8px;
+  padding: 8px 10px;
+  transition: border-color 0.1s ease, background 0.1s ease;
+}
+
+.gimmick-picker-row:hover {
+  border-color: rgba(234, 246, 255, 0.4);
+  background: rgba(255,255,255,0.05);
+}
+
+.gimmick-picker-row.nav-focused {
+  border-color: #ffd23f;
+  outline: none;
+}
+
+.gimmick-picker-row.current {
+  border-color: #6dffb8;
+  background: rgba(109, 255, 184, 0.1);
+}
+
+.gimmick-picker-name {
+  font-size: 12px;
+  font-weight: 700;
+  margin-bottom: 3px;
+}
+
+.gimmick-picker-row.current .gimmick-picker-name {
+  color: #6dffb8;
+}
+
+.gimmick-picker-desc {
+  font-size: 11px;
+  opacity: 0.8;
+  line-height: 1.35;
+}
+
+.gimmick-picker-hint {
+  margin-top: 14px;
+  font-size: 10px;
+  opacity: 0.6;
+  text-align: center;
+}
+
+.boat-stat-row {
+  display: grid;
+  grid-template-columns: 50px 1fr;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  opacity: 0.85;
+}
+
+.boat-stat-bar {
+  height: 5px;
+  border-radius: 3px;
+  background: rgba(255,255,255,0.12);
+  overflow: hidden;
+}
+
+.boat-stat-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #00c3ff, #6dffb8);
+}
+
+.options-list {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-width: 320px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 8px;
+  padding: 20px 24px;
+}
+
+.option-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  font-size: 15px;
+  pointer-events: all;
+}
+
+.option-row input[type="range"] {
+  width: 150px;
+  accent-color: #ffd23f;
+}
+
+.option-row input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  accent-color: #ffd23f;
+}
+
+/* Export/Import Save feedback (js/menu.js) - a plain status line that can
+   also grow two inline buttons for the "overwrite?" confirmation on
+   import, rather than a native confirm() - kept consistent with the rest
+   of the game's own-styled UI instead of a browser dialog. */
+.save-data-status {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  max-width: 340px;
+}
+
+.save-data-status-buttons {
+  display: flex;
+  gap: 10px;
+}
+
+.save-data-status-buttons .menu-btn {
+  padding: 8px 20px;
+  font-size: 13px;
+}
+
+.hidden {
+  display: none !important;
+}
